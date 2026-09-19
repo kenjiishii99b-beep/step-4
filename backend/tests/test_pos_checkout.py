@@ -45,10 +45,14 @@ async def _ensure_size_master(db) -> None:
         await db.commit()
 
 
-async def _ensure_color_master(db) -> None:
-    obj = await db.get(ColorMaster, (COLOR_SYSTEM_ID, "BLK"))
+async def _ensure_color_master(db, color_code: str = "BLK") -> None:
+    obj = await db.get(ColorMaster, (COLOR_SYSTEM_ID, color_code))
     if obj is None:
-        db.add(ColorMaster(color_system_id=COLOR_SYSTEM_ID, color_code="BLK", color_name="Black"))
+        db.add(
+            ColorMaster(
+                color_system_id=COLOR_SYSTEM_ID, color_code=color_code, color_name=color_code
+            )
+        )
         await db.commit()
 
 
@@ -67,7 +71,12 @@ async def _ensure_product(db, product_id: str = PRODUCT_ID) -> None:
 
 
 async def _ensure_sku(
-    db, sku_id: str, barcode: str, stock: int, product_id: str = PRODUCT_ID
+    db,
+    sku_id: str,
+    barcode: str,
+    stock: int,
+    product_id: str = PRODUCT_ID,
+    color_code: str = "BLK",
 ) -> None:
     sku = await db.get(Sku, sku_id)
     if sku is None:
@@ -79,11 +88,14 @@ async def _ensure_sku(
                 size_system_id=SIZE_SYSTEM_ID,
                 size_code="M",
                 color_system_id=COLOR_SYSTEM_ID,
-                color_code="BLK",
+                color_code=color_code,
                 store_stock=stock,
             )
         )
     else:
+        sku.product_id = product_id
+        sku.barcode_ean13 = barcode
+        sku.color_code = color_code
         sku.store_stock = stock
     await db.commit()
 
@@ -167,7 +179,10 @@ async def _ensure_discount(
 async def pos_master_data() -> AsyncGenerator[None, None]:
     async with AsyncSessionLocal() as db:
         await _ensure_size_master(db)
-        await _ensure_color_master(db)
+        # (product_id, size_code, color_code) の複合UNIQUE制約に対応するため、
+        # 同一商品を共有する各SKUフィクスチャに別々のカラーを割り当てる。
+        for color in ("BLK", "WHT", "GRY", "NVY"):
+            await _ensure_color_master(db, color)
         await _ensure_product(db)
         await _ensure_staff(db)
         await _ensure_member(db)
@@ -201,7 +216,7 @@ async def main_sku() -> AsyncGenerator[str, None]:
 async def low_stock_sku() -> AsyncGenerator[str, None]:
     sku_id = "AUTOTEST-POS-SKU-LOWSTOCK"
     async with AsyncSessionLocal() as db:
-        await _ensure_sku(db, sku_id, "4900000000027", stock=1)
+        await _ensure_sku(db, sku_id, "4900000000027", stock=1, color_code="WHT")
     yield sku_id
 
 
@@ -235,7 +250,7 @@ async def amount_discount_sku() -> AsyncGenerator[str, None]:
     """BE-U11: discount_type=AMOUNT（金額値引き）の計算検証用。"""
     sku_id = "AUTOTEST-POS-SKU-AMOUNT-DISCOUNT"
     async with AsyncSessionLocal() as db:
-        await _ensure_sku(db, sku_id, "4900000000225", stock=500)
+        await _ensure_sku(db, sku_id, "4900000000225", stock=500, color_code="GRY")
         await _ensure_discount(
             db,
             "AUTOTEST-POS-DISCOUNT-AMOUNT",
@@ -257,7 +272,7 @@ async def scheduled_discount_sku() -> AsyncGenerator[str, None]:
     """
     sku_id = "AUTOTEST-POS-SKU-SCHEDULED-DISCOUNT"
     async with AsyncSessionLocal() as db:
-        await _ensure_sku(db, sku_id, "4900000000232", stock=500)
+        await _ensure_sku(db, sku_id, "4900000000232", stock=500, color_code="NVY")
     yield sku_id
 
 

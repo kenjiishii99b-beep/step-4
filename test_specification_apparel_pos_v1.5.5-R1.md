@@ -117,6 +117,8 @@ BFF ↔ FastAPI ↔ MySQL間の通信、認証、決済、値引き、在庫、D
 | IT-36 | RBAC | 全ロール境界確認 | セキュリティ | STAFF/MANAGER/ADMINで主要管理API実行 | 設計書の許可ロール通り |
 | IT-37 | Checkout | 現金決済 預かり金額不足 | 異常 | payment_method=CASH、amount_tendered(2,000円) < 確定合計(2,200円) | 422（`INSUFFICIENT_PAYMENT`）、ROLLBACK、在庫変化なし |
 | IT-38 | Exchange | 交換差額 預かり金額不足 | 異常 | 交換差額請求550円に対しamount_tendered(500円)が不足 | 422（`INSUFFICIENT_PAYMENT`）、ROLLBACK、返品/交換とも在庫変化なし |
+| IT-39 | SKU | 商品+サイズ+カラー重複登録 | 異常 | 同一product_idに既存と同じsize_code/color_codeのSKUを追加登録 | 409（`SKU_VARIANT_ALREADY_EXISTS`）で拒否（要件2.2） |
+| IT-40 | SKU | 商品ID+サイズ+カラーでのSKU検索 | 正常/異常 | `GET /skus/lookup?product_id=...&size_code=...&color_code=...` | 該当SKUを取得（200）、存在しない組み合わせは404（`SKU_NOT_FOUND`）。バーコード読取エラー時の手入力フォールバック（要件3.1） |
 
 ---
 
@@ -140,6 +142,8 @@ BFF ↔ FastAPI ↔ MySQL間の通信、認証、決済、値引き、在庫、D
 | UT-12 | 認証 | セッション更新 | 正常 | Access Token期限切れ後に操作 | Refreshにより継続、期限切れ後は再ログイン |
 | UT-13 | 商品 | 商品検索・詳細表示 | 正常 | SKU/EAN-13で商品照会 | 正しい商品情報表示 |
 | UT-14 | 会員 | 会員コード照会 | 正常 | 会員バーコード読取 | 会員情報・割引対象を正しく反映 |
+| UT-15 | レジ販売 | 購入リストからの削除確認 | 正常/異常 | 削除ボタン押下→確認ダイアログ | キャンセルで維持、確認で削除（要件3.3） |
+| UT-16 | レジ販売 | バーコード読取エラー時の手入力 | 異常/正常 | バーコード不明→商品ID+サイズ+カラーで手入力検索 | 該当SKUが購入リストに追加される（要件3.1） |
 
 ---
 
@@ -301,6 +305,10 @@ BFF ↔ FastAPI ↔ MySQL間の通信、認証、決済、値引き、在庫、D
 | 29 | UT-12 | 2026-09-14 | Claude Code | 合格 | - | `frontend/e2e/session-refresh.spec.ts`（Playwright、ローカル環境）：APIレスポンスをモックしAccess Token期限切れ（401）を擬似的に再現。(1)Refresh Tokenが有効な場合は自動再認証・リトライにより操作が継続すること、(2)Refresh Tokenも無効な場合はログイン画面へ自動的に遷移することの両方を確認。 |
 | 30 | UT-13 | 2026-09-14 | Claude Code | 合格 | - | `frontend/e2e/product-lookup.spec.ts`（Playwright、ローカル環境）：EAN-13バーコードで商品照会（レジのバーコードスキャン）を行い、商品名・サイズ/カラー・単価・数量・小計が正しく表示されることを確認。 |
 | 31 | UT-14 | 2026-09-14 | Claude Code | 合格 | - | `frontend/e2e/member-lookup-discount.spec.ts`（Playwright、ローカル環境）：会員IDの照会で会員名・残ポイントが正しく表示されること、また会員向け値引き（RATE10%、`seed_e2e_fixtures.py`で新規投入）がサーバー確定額に正しく反映され、フロントエンドの再確認フロー（プレビューとの不一致→確定額表示→確定）を経て会計が完了し、値引き行・合計・お釣りが正しく表示されることを確認。 |
+| 32 | IT-39 | 2026-09-20 | Claude Code | 合格 | - | `tests/test_products.py::test_create_product_duplicate_size_color_returns_409`：`Sku`モデルに`(product_id, size_code, color_code)`の複合UNIQUE制約（`uq_sku_product_size_color`、マイグレーション`708b74c1cb7c`）を追加し、重複登録時に409（`SKU_VARIANT_ALREADY_EXISTS`）で拒否されることを確認。既存テストフィクスチャの重複データ（`AUTOTEST-POS-PRODUCT`配下5SKU）も是正済み。 |
+| 33 | IT-40 | 2026-09-20 | Claude Code | 合格 | - | `tests/test_products.py::test_lookup_sku_by_product_size_color`・`test_lookup_unknown_product_size_color_returns_404`：新設した`GET /skus/lookup`で商品ID+サイズ+カラーによるSKU検索が正常時200、該当なし時404（`SKU_NOT_FOUND`）で動作することを確認。 |
+| 34 | UT-15 | 2026-09-20 | Claude Code | 合格 | - | `frontend/e2e/cart-remove-confirm.spec.ts`（Playwright、ローカル環境）：購入リストの「削除」ボタン押下時に`window.confirm`による確認ダイアログが表示され、キャンセルすると行が残り、確認すると削除されることを確認。 |
+| 35 | UT-16 | 2026-09-20 | Claude Code | 合格 | - | `frontend/e2e/manual-sku-entry.spec.ts`（Playwright、ローカル環境）：バーコード読取エラー時に表示される「読み取れない場合はSKUを直接指定する」リンクから商品ID+サイズ+カラーを入力して検索すると該当SKUが購入リストに追加されること、該当なしの場合はエラー表示となることを確認。あわせてカメラスキャンを検出のたびにモーダルが閉じない連続読取（同一コード再検出は1.5秒のデバウンスで数量+1として扱う）にも対応（自動テスト対象外、カメラ実機での目視確認が必要）。 |
 
 ---
 

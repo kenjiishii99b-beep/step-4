@@ -5,6 +5,9 @@ import { BULK_SKU_COUNT, bulkSkuBarcode, login } from "./fixtures";
 // UT-03: レジ販売 / 購入リスト上限（境界）
 // 異なるSKUを100種類まで登録できるが、101種類目は追加できないことを検証する。
 test("異なるSKUを100種類まで登録でき、101種類目は追加できない", async ({ page }) => {
+  // 購入リストが100件近くまで増えるとReactの再描画コストが増え、1回あたりの
+  // スキャン処理がデフォルトタイムアウトに近づくことがあるため余裕を持たせる。
+  test.setTimeout(60000);
   await login(page);
 
   const barcodeInput = page.getByPlaceholder("EAN-13バーコードを入力してEnter");

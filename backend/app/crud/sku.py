@@ -26,6 +26,19 @@ async def get_sku_by_barcode(db: AsyncSession, barcode_ean13: str) -> Sku | None
     return result.scalar_one_or_none()
 
 
+async def get_sku_by_product_size_color(
+    db: AsyncSession, product_id: str, size_code: str, color_code: str
+) -> Sku | None:
+    result = await db.execute(
+        select(Sku).where(
+            Sku.product_id == product_id,
+            Sku.size_code == size_code,
+            Sku.color_code == color_code,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def create_sku(db: AsyncSession, sku: Sku) -> None:
     db.add(sku)
     await db.flush()

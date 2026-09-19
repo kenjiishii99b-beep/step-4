@@ -2,7 +2,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.master_reference import get_color_master, get_size_master
 from app.crud.product import create_product, get_product_by_id
-from app.crud.sku import create_sku, get_sku_by_barcode, get_sku_by_id
+from app.crud.sku import (
+    create_sku,
+    get_sku_by_barcode,
+    get_sku_by_id,
+    get_sku_by_product_size_color,
+)
 from app.models.product import Product, Sku
 from app.schemas.product import (
     ProductCreateRequest,
@@ -32,6 +37,15 @@ class DuplicateBarcodeError(Exception):
         self.barcode_ean13 = barcode_ean13
 
 
+class DuplicateSkuVariantError(Exception):
+    """同一商品内でサイズ・カラーの組み合わせが重複している（要件2.2）。"""
+
+    def __init__(self, product_id: str, size_code: str, color_code: str) -> None:
+        self.product_id = product_id
+        self.size_code = size_code
+        self.color_code = color_code
+
+
 class SizeMasterNotFoundError(Exception):
     def __init__(self, size_system_id: str, size_code: str) -> None:
         self.size_system_id = size_system_id
@@ -49,11 +63,22 @@ class SkuNotFoundError(Exception):
         self.barcode_ean13 = barcode_ean13
 
 
+class SkuVariantNotFoundError(Exception):
+    """バーコード読取エラー時の手入力フォールバック（要件3.1）で該当SKUが無い場合。"""
+
+    def __init__(self, product_id: str, size_code: str, color_code: str) -> None:
+        self.product_id = product_id
+        self.size_code = size_code
+        self.color_code = color_code
+
+
 async def _validate_and_build_sku(db: AsyncSession, product_id: str, item: SkuInput) -> Sku:
     if await get_sku_by_id(db, item.sku_id) is not None:
         raise SkuAlreadyExistsError(item.sku_id)
     if await get_sku_by_barcode(db, item.barcode_ean13) is not None:
         raise DuplicateBarcodeError(item.barcode_ean13)
+    if await get_sku_by_product_size_color(db, product_id, item.size_code, item.color_code) is not None:
+        raise DuplicateSkuVariantError(product_id, item.size_code, item.color_code)
     if await get_size_master(db, item.size_system_id, item.size_code) is None:
         raise SizeMasterNotFoundError(item.size_system_id, item.size_code)
     if await get_color_master(db, item.color_system_id, item.color_code) is None:
@@ -146,6 +171,29 @@ async def lookup_sku_by_barcode(db: AsyncSession, barcode_ean13: str) -> SkuLook
     sku = await get_sku_by_barcode(db, barcode_ean13)
     if sku is None:
         raise SkuNotFoundError(barcode_ean13)
+
+    product = await get_product_by_id(db, sku.product_id)
+    assert product is not None
+    return SkuLookupResponse(
+        sku_id=sku.sku_id,
+        barcode_ean13=sku.barcode_ean13,
+        product_id=sku.product_id,
+        product_name=product.product_name,
+        reference_price=product.default_price,
+        size_code=sku.size_code,
+        color_code=sku.color_code,
+        store_stock=sku.store_stock,
+        is_active=sku.is_active,
+    )
+
+
+async def lookup_sku_by_product_size_color(
+    db: AsyncSession, product_id: str, size_code: str, color_code: str
+) -> SkuLookupResponse:
+    """バーコード読取エラー時の手入力フォールバック（要件3.1）。"""
+    sku = await get_sku_by_product_size_color(db, product_id, size_code, color_code)
+    if sku is None:
+        raise SkuVariantNotFoundError(product_id, size_code, color_code)
 
     product = await get_product_by_id(db, sku.product_id)
     assert product is not None

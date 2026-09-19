@@ -30,7 +30,7 @@ test("アクセストークン期限切れでも自動リフレッシュによ�
 
   // 1回目は擬似的な401だが、有効なRefresh Tokenで自動再認証され、
   // リトライされた2回目のリクエストでカート追加が成功する。
-  await expect(page.getByText("E2E Tee")).toBeVisible();
+  await expect(page.locator("table").getByText("E2E Tee")).toBeVisible();
   expect(barcodeCallCount).toBeGreaterThanOrEqual(2);
 });
 

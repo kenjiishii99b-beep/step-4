@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -62,6 +63,9 @@ class Sku(CreatedAtMixin, Base):
         ),
         CheckConstraint("store_stock >= 0", name="chk_stock"),
         Index("idx_product", "product_id"),
+        UniqueConstraint(
+            "product_id", "size_code", "color_code", name="uq_sku_product_size_color"
+        ),
         MYSQL_TABLE_ARGS,
     )
 

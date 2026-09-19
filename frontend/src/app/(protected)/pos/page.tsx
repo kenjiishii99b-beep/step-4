@@ -36,7 +36,12 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 export default function PosPage() {
   const [barcode, setBarcode] = useState("");
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanSuccessMessage, setScanSuccessMessage] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [manualProductId, setManualProductId] = useState("");
+  const [manualSizeCode, setManualSizeCode] = useState("");
+  const [manualColorCode, setManualColorCode] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
 
   const [memberId, setMemberId] = useState("");
@@ -57,30 +62,38 @@ export default function PosPage() {
   const previewTax = calculateTax(previewSubtotal, PREVIEW_TAX_RATE);
   const previewTotal = calculateTotal(previewSubtotal, 0, previewTax);
 
+  function addSkuToCart(sku: SkuLookup): boolean {
+    if (!sku.is_active) {
+      setScanError("この商品は現在販売停止中です。");
+      return false;
+    }
+    let ok = true;
+    setCart((prev) => {
+      const { cart: next, rejected } = addOrIncrementCartLine(prev, {
+        sku_id: sku.sku_id,
+        product_name: sku.product_name,
+        size_code: sku.size_code,
+        color_code: sku.color_code,
+        quantity: 1,
+        reference_price: sku.reference_price,
+        store_stock: sku.store_stock,
+      });
+      if (rejected) {
+        setScanError("購入リストの上限（100SKU）に達しています。");
+        ok = false;
+      }
+      return next;
+    });
+    return ok;
+  }
+
   async function addSkuByBarcode(code: string) {
     setScanError(null);
     try {
       const response = await apiClient.get<SkuLookup>(`/skus/barcode/${encodeURIComponent(code)}`);
-      const sku = response.data;
-      if (!sku.is_active) {
-        setScanError("この商品は現在販売停止中です。");
-        return;
+      if (addSkuToCart(response.data)) {
+        setScanSuccessMessage(`「${response.data.product_name}」を追加しました。`);
       }
-      setCart((prev) => {
-        const { cart: next, rejected } = addOrIncrementCartLine(prev, {
-          sku_id: sku.sku_id,
-          product_name: sku.product_name,
-          size_code: sku.size_code,
-          color_code: sku.color_code,
-          quantity: 1,
-          reference_price: sku.reference_price,
-          store_stock: sku.store_stock,
-        });
-        if (rejected) {
-          setScanError("購入リストの上限（100SKU）に達しています。");
-        }
-        return next;
-      });
     } catch (err) {
       setScanError(getErrorMessage(err, "商品が見つかりませんでした。"));
     }
@@ -95,8 +108,30 @@ export default function PosPage() {
   }
 
   function handleCameraDetected(code: string) {
-    setCameraOpen(false);
     void addSkuByBarcode(code);
+  }
+
+  async function handleManualEntry(event: React.FormEvent) {
+    event.preventDefault();
+    setScanError(null);
+    setScanSuccessMessage(null);
+    const productId = manualProductId.trim();
+    const sizeCode = manualSizeCode.trim();
+    const colorCode = manualColorCode.trim();
+    if (!productId || !sizeCode || !colorCode) return;
+    try {
+      const response = await apiClient.get<SkuLookup>("/skus/lookup", {
+        params: { product_id: productId, size_code: sizeCode, color_code: colorCode },
+      });
+      if (addSkuToCart(response.data)) {
+        setScanSuccessMessage(`「${response.data.product_name}」を追加しました。`);
+        setManualProductId("");
+        setManualSizeCode("");
+        setManualColorCode("");
+      }
+    } catch (err) {
+      setScanError(getErrorMessage(err, "該当する商品が見つかりませんでした。"));
+    }
   }
 
   function updateQuantity(skuId: string, quantity: number) {
@@ -106,7 +141,10 @@ export default function PosPage() {
     );
   }
 
-  function removeLine(skuId: string) {
+  function removeLine(skuId: string, productName: string) {
+    if (!window.confirm(`「${productName}」を購入リストから削除しますか？`)) {
+      return;
+    }
     setCart((prev) => prev.filter((line) => line.sku_id !== skuId));
   }
 
@@ -203,12 +241,57 @@ export default function PosPage() {
               📷 カメラで読取
             </Button>
           </form>
-          {scanError && <p className="mt-2 text-sm text-red-600">{scanError}</p>}
+          {scanError && (
+            <div className="mt-2 text-sm text-red-600">
+              <p>{scanError}</p>
+              <button
+                type="button"
+                className="mt-1 text-xs text-blue-600 hover:underline"
+                onClick={() => setManualEntryOpen(true)}
+              >
+                読み取れない場合はSKUを直接指定する
+              </button>
+            </div>
+          )}
+          {scanSuccessMessage && (
+            <p className="mt-2 text-sm text-green-600">{scanSuccessMessage}</p>
+          )}
           {cameraOpen && (
             <BarcodeScanner
               onDetected={handleCameraDetected}
               onClose={() => setCameraOpen(false)}
             />
+          )}
+          {manualEntryOpen && (
+            <form onSubmit={handleManualEntry} className="mt-3 border-t pt-3">
+              <p className="mb-2 text-xs text-gray-500">
+                バーコードが読み取れない場合、商品ID・サイズ・カラーを直接指定して検索できます。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <TextInput
+                  value={manualProductId}
+                  onChange={(e) => setManualProductId(e.target.value)}
+                  placeholder="商品ID"
+                  className="w-40"
+                />
+                <TextInput
+                  value={manualSizeCode}
+                  onChange={(e) => setManualSizeCode(e.target.value)}
+                  placeholder="サイズ"
+                  className="w-24"
+                />
+                <TextInput
+                  value={manualColorCode}
+                  onChange={(e) => setManualColorCode(e.target.value)}
+                  placeholder="カラー"
+                  className="w-24"
+                />
+                <Button type="submit">検索して追加</Button>
+                <Button type="button" variant="secondary" onClick={() => setManualEntryOpen(false)}>
+                  閉じる
+                </Button>
+              </div>
+            </form>
           )}
         </Card>
 
@@ -251,7 +334,7 @@ export default function PosPage() {
                     </td>
                     <td className="py-2">
                       <button
-                        onClick={() => removeLine(line.sku_id)}
+                        onClick={() => removeLine(line.sku_id, line.product_name)}
                         className="text-xs text-red-600 hover:underline"
                       >
                         削除

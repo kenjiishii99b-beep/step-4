@@ -11,12 +11,21 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
+// 同一コードの連続検出フレームを1回のスキャンとして扱うための最短間隔。
+// この間隔を空ければ、同じ商品の再スキャン（数量+1）として再度受け付ける。
+const RESCAN_INTERVAL_MS = 1500;
+
 /**
  * スマートフォン等のカメラでEAN-13バーコードを読み取るモーダル。
  * 設計仕様書 2.2節のアクティビティ図「カメラでEAN-13スキャン」に対応する。
  * getUserMedia はセキュアコンテキスト（HTTPS）でのみ動作するため、
  * ローカル開発では http://localhost からのみ、本番はデプロイ後のHTTPS URLで
  * 動作する。
+ *
+ * 要件3.1「連続して商品を読み取れること（カメラ画面を閉じることなく）」に
+ * 対応するため、1件検出してもカメラは閉じず、呼び出し側が明示的に
+ * 閉じるまで読み取りを継続する。同一コードの連続フレームによる誤カウントを
+ * 防ぐため、直前と同じコードは RESCAN_INTERVAL_MS 経過するまで無視する。
  */
 export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -27,19 +36,24 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
   useEffect(() => {
     const reader = new BrowserMultiFormatReader();
     let controls: IScannerControls | undefined;
-    let stopped = false;
     let cancelled = false;
+    let lastCode: string | null = null;
+    let lastDetectedAt = 0;
 
     reader
       .decodeFromConstraints(
         { video: { facingMode: { ideal: "environment" } } },
         videoRef.current ?? undefined,
         (result) => {
-          if (result && !stopped) {
-            stopped = true;
-            onDetectedRef.current(result.getText());
-            controls?.stop();
+          if (!result) return;
+          const text = result.getText();
+          const now = Date.now();
+          if (text === lastCode && now - lastDetectedAt < RESCAN_INTERVAL_MS) {
+            return;
           }
+          lastCode = text;
+          lastDetectedAt = now;
+          onDetectedRef.current(text);
         }
       )
       .then((c) => {

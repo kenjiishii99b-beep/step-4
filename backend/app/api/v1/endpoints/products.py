@@ -58,6 +58,16 @@ def _handle_sku_validation_errors(exc: Exception) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "BARCODE_ALREADY_EXISTS", "barcode_ean13": exc.barcode_ean13},
         ) from exc
+    if isinstance(exc, product_service.DuplicateSkuVariantError):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "SKU_VARIANT_ALREADY_EXISTS",
+                "product_id": exc.product_id,
+                "size_code": exc.size_code,
+                "color_code": exc.color_code,
+            },
+        ) from exc
     if isinstance(exc, product_service.SizeMasterNotFoundError):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -108,6 +118,7 @@ async def create_product(
     except (
         product_service.SkuAlreadyExistsError,
         product_service.DuplicateBarcodeError,
+        product_service.DuplicateSkuVariantError,
         product_service.SizeMasterNotFoundError,
         product_service.ColorMasterNotFoundError,
     ) as exc:
@@ -133,6 +144,7 @@ async def update_product(
     except (
         product_service.SkuAlreadyExistsError,
         product_service.DuplicateBarcodeError,
+        product_service.DuplicateSkuVariantError,
         product_service.SizeMasterNotFoundError,
         product_service.ColorMasterNotFoundError,
     ) as exc:

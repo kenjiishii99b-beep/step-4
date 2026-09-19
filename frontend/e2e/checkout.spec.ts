@@ -9,13 +9,14 @@ test("2SKUをスキャンして現金会計するとレシートが正しく表�
   await login(page);
 
   const barcodeInput = page.getByPlaceholder("EAN-13バーコードを入力してEnter");
+  const cartTable = page.locator("table");
   await barcodeInput.fill(SKU_1_BARCODE);
   await barcodeInput.press("Enter");
-  await expect(page.getByText("E2E Tee")).toBeVisible();
+  await expect(cartTable.getByText("E2E Tee")).toBeVisible();
 
   await barcodeInput.fill(SKU_2_BARCODE);
   await barcodeInput.press("Enter");
-  await expect(page.getByText("E2E Pants")).toBeVisible();
+  await expect(cartTable.getByText("E2E Pants")).toBeVisible();
 
   // 税抜小計 2,500 + 4,800 = 7,300円、税額(10%floor) = 730円、税込合計 = 8,030円
   await expect(page.getByText("¥8,030")).toBeVisible();

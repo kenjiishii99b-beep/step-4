@@ -192,6 +192,58 @@ async def test_create_product_duplicate_barcode_returns_409(
     assert response.json()["detail"]["error"] == "BARCODE_ALREADY_EXISTS"
 
 
+async def test_create_product_duplicate_size_color_returns_409(
+    client: AsyncClient, manager_headers: dict[str, str], new_product_id: str
+) -> None:
+    """要件2.2: 同一商品内でサイズ・カラーの組み合わせは一意でなければならない。"""
+    first = await client.post(
+        "/api/v1/admin/products",
+        headers=manager_headers,
+        json={
+            "product_id": new_product_id,
+            "product_name": "Variant Owner",
+            "category": "TOPS",
+            "default_price": 1000,
+            "skus": [
+                {
+                    "sku_id": f"{new_product_id}-OWNER",
+                    "barcode_ean13": "4901234500071",
+                    "size_system_id": "STANDARD",
+                    "size_code": "M",
+                    "color_system_id": "BASIC",
+                    "color_code": "BLK",
+                }
+            ],
+        },
+    )
+    assert first.status_code == 200, first.text
+
+    response = await client.put(
+        f"/api/v1/admin/products/{new_product_id}",
+        headers=manager_headers,
+        json={
+            "product_name": "Variant Owner",
+            "category": "TOPS",
+            "default_price": 1000,
+            "skus": [
+                {
+                    "sku_id": f"{new_product_id}-CLASH",
+                    "barcode_ean13": "4901234500088",
+                    "size_system_id": "STANDARD",
+                    "size_code": "M",
+                    "color_system_id": "BASIC",
+                    "color_code": "BLK",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["error"] == "SKU_VARIANT_ALREADY_EXISTS"
+    assert detail["size_code"] == "M"
+    assert detail["color_code"] == "BLK"
+
+
 async def test_staff_cannot_create_product(
     client: AsyncClient, staff_headers: dict[str, str], new_product_id: str
 ) -> None:
@@ -346,6 +398,58 @@ async def test_lookup_sku_by_barcode(
     assert body["product_name"] == "Scan Me"
     assert body["reference_price"] == 800
     assert body["store_stock"] == 3
+
+
+async def test_lookup_sku_by_product_size_color(
+    client: AsyncClient,
+    manager_headers: dict[str, str],
+    staff_headers: dict[str, str],
+    new_product_id: str,
+) -> None:
+    """要件3.1: バーコード読取エラー時の手入力フォールバック（商品ID+サイズ+カラー）。"""
+    await client.post(
+        "/api/v1/admin/products",
+        headers=manager_headers,
+        json={
+            "product_id": new_product_id,
+            "product_name": "Manual Entry Me",
+            "category": "TOPS",
+            "default_price": 900,
+            "skus": [
+                {
+                    "sku_id": f"{new_product_id}-MANUAL",
+                    "barcode_ean13": "4901234500095",
+                    "size_system_id": "STANDARD",
+                    "size_code": "L",
+                    "color_system_id": "BASIC",
+                    "color_code": "NVY",
+                    "store_stock": 7,
+                }
+            ],
+        },
+    )
+    response = await client.get(
+        "/api/v1/skus/lookup",
+        params={"product_id": new_product_id, "size_code": "L", "color_code": "NVY"},
+        headers=staff_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["product_name"] == "Manual Entry Me"
+    assert body["reference_price"] == 900
+    assert body["store_stock"] == 7
+
+
+async def test_lookup_unknown_product_size_color_returns_404(
+    client: AsyncClient, staff_headers: dict[str, str]
+) -> None:
+    response = await client.get(
+        "/api/v1/skus/lookup",
+        params={"product_id": "NOPE", "size_code": "M", "color_code": "BLK"},
+        headers=staff_headers,
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["error"] == "SKU_NOT_FOUND"
 
 
 async def test_lookup_unknown_barcode_returns_404(
