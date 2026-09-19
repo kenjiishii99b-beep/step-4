@@ -51,8 +51,8 @@ export function getStoreStock(skuId: string): number {
 export const E2E_CASHIER = { staffId: "E2E-CASHIER", password: "E2ePlaywright!23" };
 export const E2E_MANAGER = { staffId: "E2E-MANAGER", password: "E2ePlaywright!23" };
 
-export const SKU_1_BARCODE = "4912345678901"; // E2E Tee
-export const SKU_2_BARCODE = "4912345678932"; // E2E Pants
+export const SKU_1_BARCODE = "2900000000018"; // E2E Tee
+export const SKU_2_BARCODE = "2900000000025"; // E2E Pants
 
 // 在庫移動テスト専用SKU。店舗在庫100・倉庫在庫0に毎回リセットされる。
 export const SKU_3_ID = "E2E-PRODUCT-3-M-BLK";
@@ -66,8 +66,18 @@ export const E2E_MEMBER_POINT_BALANCE = 250;
 export const E2E_MEMBER_DISCOUNT_RATE = 10;
 
 // UT-03（購入リストSKU上限）用。101種類の異なるSKUのバーコードを生成する。
+// backend/scripts/seed_e2e_fixtures.py の bulk_sku_barcode() と同じ規則
+// （プレフィックス"29" + 正規のEAN-13チェックデジット）。
+function ean13CheckDigit(digits12: string): string {
+  let total = 0;
+  for (let i = 0; i < digits12.length; i++) {
+    total += Number(digits12[i]) * (i % 2 === 1 ? 3 : 1);
+  }
+  return String((10 - (total % 10)) % 10);
+}
 export function bulkSkuBarcode(index: number): string {
-  return `4999999${String(index).padStart(6, "0")}`;
+  const body = `29${String(100 + index).padStart(10, "0")}`;
+  return body + ean13CheckDigit(body);
 }
 export const BULK_SKU_COUNT = 101;
 

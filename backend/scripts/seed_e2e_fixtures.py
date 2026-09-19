@@ -36,13 +36,13 @@ PRODUCT_2_ID = "E2E-PRODUCT-2"
 PRODUCT_3_ID = "E2E-PRODUCT-3"
 
 SKU_1_ID = "E2E-PRODUCT-1-M-BLK"
-SKU_1_BARCODE = "4912345678901"
+SKU_1_BARCODE = "2900000000018"
 SKU_2_ID = "E2E-PRODUCT-2-M-BLK"
-SKU_2_BARCODE = "4912345678932"
+SKU_2_BARCODE = "2900000000025"
 # 在庫移動テスト専用SKU。チェックアウト/交換テストと在庫数を共有しないよう分離し、
 # 店舗在庫・倉庫在庫の両方を毎回固定値へリセットして再現性を確保する。
 SKU_3_ID = "E2E-PRODUCT-3-M-BLK"
-SKU_3_BARCODE = "4912345678956"
+SKU_3_BARCODE = "2900000000032"
 
 SEED_STOCK = 999_999
 INVENTORY_TEST_STORE_STOCK = 100
@@ -134,6 +134,7 @@ async def _ensure_sku(
             )
         )
     else:
+        sku.barcode_ean13 = barcode
         sku.store_stock = store_stock
         sku.warehouse_stock = warehouse_stock
         sku.is_active = True
@@ -185,8 +186,20 @@ def bulk_sku_id(index: int) -> str:
     return f"E2E-BULK-{index:03d}-M-BLK"
 
 
+# GS1の「restricted circulation number」用プレフィックス(20-29)のうち、
+# 既存デモ商品（backend/generate_demo_products.py、プレフィックス"20"）と衝突しない
+# "29"を使用する。チェックデジットも正規のEAN-13アルゴリズムで計算する。
+_BULK_BARCODE_PREFIX = "29"
+
+
+def _ean13_check_digit(digits12: str) -> str:
+    total = sum(int(d) * (3 if i % 2 == 1 else 1) for i, d in enumerate(digits12))
+    return str((10 - total % 10) % 10)
+
+
 def bulk_sku_barcode(index: int) -> str:
-    return f"4999999{index:06d}"
+    body = f"{_BULK_BARCODE_PREFIX}{100 + index:010d}"
+    return body + _ean13_check_digit(body)
 
 
 async def _ensure_bulk_skus(db) -> None:
