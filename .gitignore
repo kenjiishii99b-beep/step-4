@@ -1,0 +1,30 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Backend (Python)
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.egg-info/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
+
+# Frontend (Node / Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/.swc/
+frontend/out/
+frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
