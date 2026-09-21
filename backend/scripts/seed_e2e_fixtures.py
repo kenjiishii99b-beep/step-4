@@ -26,6 +26,7 @@ from app.models import (
 
 CASHIER_STAFF_ID = "E2E-CASHIER"
 MANAGER_STAFF_ID = "E2E-MANAGER"
+ADMIN_STAFF_ID = "E2E-ADMIN"
 E2E_PASSWORD = "E2ePlaywright!23"
 
 SIZE_SYSTEM_ID = "E2E-SIZE"
@@ -230,6 +231,7 @@ async def main() -> None:
         )
         await _ensure_staff(db, CASHIER_STAFF_ID, "E2E Cashier", RoleEnum.STAFF)
         await _ensure_staff(db, MANAGER_STAFF_ID, "E2E Manager", RoleEnum.MANAGER)
+        await _ensure_staff(db, ADMIN_STAFF_ID, "E2E Admin", RoleEnum.ADMIN)
         await _ensure_member(db)
         await _ensure_member_discount(db)
         await _ensure_bulk_skus(db)
