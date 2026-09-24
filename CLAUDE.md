@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 モノレポ構成で、フロントエンドとバックエンドを `frontend/` と `backend/` に分離する。
 
-**詳細設計の一次情報は [`Apparel_POS_Design_Specification_v1.5.md`](./Apparel_POS_Design_Specification_v1.5.md) を参照すること。** UML（ユースケース/アクティビティ/シーケンス/クラス図）、DB の DDL、BFF↔Backend のエンドポイント対応表、セキュリティ要件の詳細はすべてそこにある。本 CLAUDE.md はその要点と実装時の運用ルールのみをまとめる。
+**詳細設計の一次情報は [`Apparel_POS_Design_Specification_v1.5.5.md`](./Apparel_POS_Design_Specification_v1.5.5.md) を参照すること。** UML（ユースケース/アクティビティ/シーケンス/クラス図）、DB の DDL、BFF↔Backend のエンドポイント対応表、セキュリティ要件の詳細はすべてそこにある。本 CLAUDE.md はその要点と実装時の運用ルールのみをまとめる。
 
 ## Tech stack
 
