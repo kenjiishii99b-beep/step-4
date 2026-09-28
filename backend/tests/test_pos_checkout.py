@@ -683,3 +683,26 @@ async def test_checkout_rejects_quantity_over_99(
         },
     )
     assert response.status_code == 422
+
+
+async def test_checkout_rejects_duplicate_sku_in_items(
+    client: AsyncClient, auth_headers: dict[str, str], main_sku: str
+) -> None:
+    """同一sku_idを複数行に分けることで在庫チェックを回避できないことを確認する。"""
+    response = await client.post(
+        "/api/v1/pos/checkout",
+        headers=auth_headers,
+        json={
+            "items": [
+                {"sku_id": main_sku, "quantity": 60},
+                {"sku_id": main_sku, "quantity": 60},
+            ],
+            "client_total": 1,
+            "payment_method": "CASH",
+        },
+    )
+    assert response.status_code == 422
+
+    async with AsyncSessionLocal() as db:
+        sku = await db.get(Sku, main_sku)
+        assert sku.store_stock == 500  # 在庫は変動しない

@@ -222,6 +222,38 @@ async def test_partial_return_then_exceeding_remaining_is_rejected(
     assert detail["remaining"] == 1
 
 
+async def test_return_rejects_duplicate_sku_in_same_request(
+    client: AsyncClient, auth_headers: dict[str, str], sold_sku: dict
+) -> None:
+    """同一sku_idを複数行に分けることで1回のリクエスト内で二重返品できないことを確認する。"""
+    sale = await _checkout(client, auth_headers, sold_sku["sku_id"], 2, sold_sku["unit_price"])
+    parent_id = sale["transaction_id"]
+
+    async with AsyncSessionLocal() as db:
+        sku = await db.get(Sku, sold_sku["sku_id"])
+        stock_before = sku.store_stock
+
+    response = await client.post(
+        "/api/v1/pos/refund-exchange",
+        headers=auth_headers,
+        json={
+            "parent_transaction_id": parent_id,
+            "tx_type": "RETURN",
+            "return_items": [
+                {"sku_id": sold_sku["sku_id"], "quantity": 2},
+                {"sku_id": sold_sku["sku_id"], "quantity": 2},
+            ],
+            "client_total": -4400,
+            "payment_method": "CASH",
+        },
+    )
+    assert response.status_code == 422
+
+    async with AsyncSessionLocal() as db:
+        sku = await db.get(Sku, sold_sku["sku_id"])
+        assert sku.store_stock == stock_before  # 在庫は変動しない
+
+
 async def test_return_rejects_sku_not_in_original_transaction(
     client: AsyncClient, auth_headers: dict[str, str], sold_sku: dict, exchange_target_sku: str
 ) -> None:

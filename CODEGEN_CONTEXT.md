@@ -384,6 +384,7 @@ class CheckoutRequest(BaseModel):
     payment_method: PaymentMethodEnum
     member_id: str | None = Field(default=None, max_length=32)
     amount_tendered: int | None = Field(default=None, ge=0)
+    # model_validator: items内にsku_idの重複があれば拒否（在庫チェック回避防止）
 
 class CheckoutResponse(BaseModel):
     transaction_id: str
@@ -406,6 +407,8 @@ class RefundExchangeRequest(BaseModel):
     payment_method: PaymentMethodEnum
     amount_tendered: int | None = Field(default=None, ge=0)
     # model_validator: RETURNならexchange_items空必須、EXCHANGEならexchange_items必須
+    # model_validator: return_items/exchange_itemsそれぞれ内でsku_idの重複があれば拒否
+    #   （同一リクエスト内で二重返品・過剰返金を防止）
 
 class RefundExchangeResponse(BaseModel):
     transaction_id: str

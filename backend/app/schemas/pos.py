@@ -15,6 +15,13 @@ class CheckoutRequest(BaseModel):
     member_id: str | None = Field(default=None, max_length=32)
     amount_tendered: int | None = Field(default=None, ge=0)
 
+    @model_validator(mode="after")
+    def _validate_no_duplicate_skus(self) -> "CheckoutRequest":
+        sku_ids = [item.sku_id for item in self.items]
+        if len(sku_ids) != len(set(sku_ids)):
+            raise ValueError("items に同一の sku_id を複数行指定することはできません。")
+        return self
+
 
 class CheckoutResponse(BaseModel):
     transaction_id: str
@@ -51,6 +58,16 @@ class RefundExchangeRequest(BaseModel):
             raise ValueError("RETURN では exchange_items を指定できません。")
         if self.tx_type == TransactionTypeEnum.EXCHANGE and not self.exchange_items:
             raise ValueError("EXCHANGE では exchange_items が必須です。")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_no_duplicate_skus(self) -> "RefundExchangeRequest":
+        return_sku_ids = [item.sku_id for item in self.return_items]
+        if len(return_sku_ids) != len(set(return_sku_ids)):
+            raise ValueError("return_items に同一の sku_id を複数行指定することはできません。")
+        exchange_sku_ids = [item.sku_id for item in self.exchange_items]
+        if len(exchange_sku_ids) != len(set(exchange_sku_ids)):
+            raise ValueError("exchange_items に同一の sku_id を複数行指定することはできません。")
         return self
 
 
