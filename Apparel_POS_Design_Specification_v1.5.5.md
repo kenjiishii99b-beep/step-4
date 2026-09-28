@@ -3,15 +3,12 @@
 -   **文書バージョン**：v1.5.5
 -   **作成日**：2026年9月
 -   **改訂内容**：
-    -   `Member → DiscountMaster` リレーションの多重度を `0..1` に修正
-    -   DiscountMasterの `target_type` と対象ID（member_id / product_id / sku_id）の整合性検証を明記
-    -   クラス図に `Member → DiscountMaster` リレーションを追加し、会員対象値引きのモデル整合性を確保
-    -   DiscountMasterクラス図へ `member_id` を追加し、DDLとの整合性を確保
+    -   （後日訂正）DiscountMasterの `target_type` と対象ID（product_id / sku_id）の整合性検証を明記
     -   Refresh TokenのBFF管理・更新フローの表現を明確化
     -   CORSの本番設計をBFF経由に統一し、サンプルコードの整合性を修正
     -   SalesItemクラス図へ `product_id` を追加し、DDLとの整合性を確保
     -   `sales_items.product_id` と `skus.product_id` の一致をBackendで検証する仕様を追加
-    -   DiscountMasterの会員対象値引き用 `member_id` 外部キーを追加
+    -   （後日訂正）DiscountMasterの会員対象値引き（`product_id`・`sku_id`ともにNULL）を定義
     -   SKUテーブルの外部キー（Size/Color
         Master）および複合キー参照の厳密化
     -   各種履歴・マスターテーブル（PriceHistory, DiscountMaster,
@@ -330,7 +327,6 @@ classDiagram
         +String target_type
         +String product_id
         +String sku_id
-        +String member_id
         +String discount_type
         +Decimal discount_value
         +DateTime valid_from
@@ -368,7 +364,6 @@ classDiagram
     SKU "0..1" <-- "*" PriceHistory : SKU price
     Product "1" <-- "*" DiscountMaster : product discount
     SKU "0..1" <-- "*" DiscountMaster : SKU discount
-    Member "0..1" <-- "*" DiscountMaster : member discount
     SKU "*" --> "1" SizeMaster : uses
     SKU "*" --> "1" ColorMaster : uses
     SKU "1" <-- "*" InventoryHistory : stock history
@@ -387,8 +382,11 @@ classDiagram
 商品識別情報の不整合を防止する。
 
 **値引きマスターの整合性**：`discount_masters.target_type` と対象IDの組み合わせは
-Backendで必ず検証する。`MEMBER` は `member_id` のみ、`PRODUCT` は `product_id` のみ、
-`SKU` は `sku_id` のみを対象IDとして設定し、それ以外の対象IDはNULLとする。
+Backendで必ず検証する。`discount_masters` テーブルに `member_id` カラムは存在しない。
+`PRODUCT` は `product_id` のみ、`SKU` は `sku_id` のみを対象IDとして設定し、
+`MEMBER` は特定の会員に紐付くものではなく「会員向け全体値引き」として
+`product_id`・`sku_id` をともに `NULL` に設定する（会員が紐付いた取引であれば
+一律に適用される）。それ以外の組み合わせはBackendのバリデーションで拒否する。
 
 ------------------------------------------------------------------------
 
@@ -680,22 +678,22 @@ CREATE TABLE price_histories (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 -- 10. 値引きマスター
+-- MEMBER対象値引き（会員向け全体値引き）は特定の会員に紐付けず、
+-- product_id・sku_idをともにNULLとして表現する（member_idカラムは持たない）。
 CREATE TABLE discount_masters (
     discount_id VARCHAR(64) PRIMARY KEY,
     target_type ENUM('SKU', 'PRODUCT', 'MEMBER') NOT NULL,
     product_id VARCHAR(32) NULL,
     sku_id VARCHAR(64) NULL,
-    member_id VARCHAR(32) NULL,
     discount_type ENUM('RATE', 'AMOUNT') NOT NULL,
     discount_value DECIMAL(10,2) NOT NULL,
     valid_from DATETIME NOT NULL,
     valid_to DATETIME NULL,
     priority INT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    INDEX idx_discount_target (target_type, product_id, sku_id, member_id, valid_from, valid_to),
+    INDEX idx_discount_target (target_type, product_id, sku_id, valid_from, valid_to),
     CONSTRAINT fk_discount_product FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE RESTRICT,
-    CONSTRAINT fk_discount_sku FOREIGN KEY (sku_id) REFERENCES skus(sku_id) ON DELETE RESTRICT,
-    CONSTRAINT fk_discount_member FOREIGN KEY (member_id) REFERENCES members(member_id) ON DELETE RESTRICT
+    CONSTRAINT fk_discount_sku FOREIGN KEY (sku_id) REFERENCES skus(sku_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 -- 11. 税率マスター
@@ -726,9 +724,10 @@ CREATE TABLE inventory_histories (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 -- DiscountMaster補足：
--- target_type='MEMBER' の場合は member_id を必須とし、product_id / sku_id はNULLとする。
--- target_type='PRODUCT' の場合は product_id を必須とし、member_id / sku_id はNULLとする。
--- target_type='SKU' の場合は sku_id を必須とし、member_id / product_id はNULLとする。
+-- target_type='MEMBER' の場合は product_id / sku_id をともにNULLとする
+--   （特定の会員に紐付けず、会員が紐付いた取引に一律適用される「会員向け全体値引き」）。
+-- target_type='PRODUCT' の場合は product_id を必須とし、sku_id はNULLとする。
+-- target_type='SKU' の場合は sku_id を必須とし、product_id はNULLとする。
 -- 上記の相互排他・必須条件はBackendの入力バリデーションで必ず検証する。
 ```
 
@@ -869,7 +868,7 @@ CREATE TABLE inventory_histories (
 -   [x] Rate Limiting（5回失敗で15分ロック）
 -   [x] OSS脆弱性スキャン（npm audit / pip-audit）
 -   [x] Dependabot設定
--   [x] DiscountMasterの会員対象値引き（`member_id`）を定義
+-   [x] DiscountMasterの会員対象値引き（`product_id`・`sku_id`ともにNULL）を定義
 -   [x] DiscountMasterの `target_type` と対象IDの整合性をBackendで検証
 
 ### POS業務 & データ要件
@@ -893,9 +892,16 @@ CREATE TABLE inventory_histories (
 1. Refresh TokenはブラウザのHttpOnly Cookieで保持し、更新時はBFFがFastAPIへ内部転送する。
 2. 本番環境ではBrowser → BFF → FastAPIの経路に統一し、FastAPIのブラウザ向けCORSを前提としない。
 3. SalesItemクラス図とDDLの `product_id` を一致させ、登録時に `sku_id` と `product_id` の整合性をBackendで検証する。
-4. DiscountMasterで `target_type='MEMBER'` を利用できるよう `member_id` と外部キーを追加した。
+4. DiscountMasterで `target_type='MEMBER'` を利用できるようにした（特定の会員に紐付ける
+   `member_id` カラムは持たず、`product_id`・`sku_id` をともにNULLとする「会員向け
+   全体値引き」として表現する）。
 5. Connection Poolとサーバーレス環境のコールドスタート対策を分離して記述している。
-6. DiscountMasterのDDLとクラス図の双方で `member_id` を定義し、会員対象値引きのモデル整合性を確保している。
-7. クラス図に `Member → DiscountMaster` リレーションを追加し、会員対象値引きの関連を明示している。
-8. `Member → DiscountMaster` の多重度を `0..1` とし、SKU/商品/会員の各値引き種別を表現できるよう整合性を修正している。
-9. `DiscountMaster.target_type` と `member_id` / `product_id` / `sku_id` の組み合わせをBackendで検証する仕様を明記している。
+9. `DiscountMaster.target_type` と `product_id` / `sku_id` の組み合わせをBackendで
+   検証する仕様を明記している。
+
+**訂正注記（v1.5.5内での修正）**：本バージョンは当初、DiscountMasterに
+`member_id` カラム・外部キー・`Member → DiscountMaster` リレーション（上記旧項目
+6〜8）を追加する記載になっていたが、実際の実装（`backend/app/models/product.py`）
+には該当カラムが存在しない。会員対象値引きは `product_id`・`sku_id` をともにNULLと
+する「会員向け全体値引き」として実装されており、本ドキュメントはこれに合わせて
+該当箇所（クラス図・DDL・整合性検証の説明・本チェックリスト）を修正した。
