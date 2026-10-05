@@ -2,6 +2,7 @@
 
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
@@ -14,6 +15,14 @@ interface BarcodeScannerProps {
 // 同一コードの連続検出フレームを1回のスキャンとして扱うための最短間隔。
 // この間隔を空ければ、同じ商品の再スキャン（数量+1）として再度受け付ける。
 const RESCAN_INTERVAL_MS = 1500;
+
+// このアプリで読み取る対象はEAN-13のみ。フォーマットを絞り込むと、
+// マルチフォーマット走査（1フレームごとに全フォーマットを試す）より
+// 検出が速く・安定しやすくなる。TRY_HARDER は低解像度・ピント不良な
+// 映像でも粘り強く走査するためのヒント（処理は多少重くなる）。
+const HINTS = new Map();
+HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13]);
+HINTS.set(DecodeHintType.TRY_HARDER, true);
 
 /**
  * スマートフォン等のカメラでEAN-13バーコードを読み取るモーダル。
@@ -34,7 +43,7 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
   onDetectedRef.current = onDetected;
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
+    const reader = new BrowserMultiFormatReader(HINTS);
     let controls: IScannerControls | undefined;
     let cancelled = false;
     let lastCode: string | null = null;
@@ -81,6 +90,9 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
         <video ref={videoRef} className="w-full" muted playsInline />
       </div>
       <p className="mt-3 text-sm text-white">バーコードを枠内に写してください</p>
+      <p className="mt-1 max-w-sm text-center text-xs text-white/70">
+        反応しない場合は、10〜15cmほど離してピントを合わせ、明るい場所で水平に写してください。
+      </p>
       {error && <p className="mt-2 max-w-sm text-center text-sm text-red-300">{error}</p>}
       <Button type="button" variant="secondary" className="mt-4" onClick={onClose}>
         閉じる
