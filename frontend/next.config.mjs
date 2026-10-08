@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: "standalone",
   webpack: (config, { dev }) => {
     // Docker Desktop (Windows/Mac) のバインドマウント越しには inotify イベントが
     // 伝播しないため、ポーリング監視にフォールバックしてホットリロードを機能させる。
