@@ -4,7 +4,7 @@
 
 レジ会計、返品・交換、在庫、会員、マスター管理まで、日々の店舗業務で使う操作手順をまとめたものです。担当者IDでログインすると、ロールに応じて使える機能が自動的に切り替わります。
 
-- URL: https://ca-pos-frontend.whiteglacier-fe08d1c0.japaneast.azurecontainerapps.io
+- URL: https://app-tech0-gen12-15-fe.azurewebsites.net
 
 **ロール**: `STAFF`（一般スタッフ）/ `MANAGER`（店長）/ `ADMIN`（システム管理者）
 

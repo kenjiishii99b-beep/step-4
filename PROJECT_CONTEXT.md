@@ -5,7 +5,7 @@
 店舗レジ業務（バーコード販売・返品交換・在庫・会員・マスター管理）を担うアパレル業向けPOSアプリ。
 
 - GitHub: https://github.com/kenjiishii99b-beep/step-4
-- 本番URL: https://ca-pos-frontend.whiteglacier-fe08d1c0.japaneast.azurecontainerapps.io
+- 本番URL: https://app-tech0-gen12-15-fe.azurewebsites.net
 - リソースグループ: `rg-001-gen12`
 
 ---
@@ -25,7 +25,7 @@
    UIのみ         /api/bff/** サーバー側      /api/v1/** 内部通信のみ        apparel_pos
 ```
 
-ブラウザはFastAPIに直接アクセスしない。すべて同一オリジンの`/api/bff/**`を経由し、Next.jsのRoute Handlerがサーバー間で`/api/v1/**`へ転送する。FastAPIの物理URL（`BACKEND_INTERNAL_URL`）はBFFのサーバー側コードにしか存在せず、Azure上でも`ca-pos-backend`はInternal ingress（外部非公開）。
+ブラウザはFastAPIに直接アクセスしない。すべて同一オリジンの`/api/bff/**`を経由し、Next.jsのRoute Handlerがサーバー間で`/api/v1/**`へ転送する。FastAPIの物理URL（`BACKEND_INTERNAL_URL`）はBFFのサーバー側コードにしか存在しない。現行のApp Service構成ではバックエンド（`app-tech0-gen12-15-be`）自体は外部到達可能なURLを持つため、ネットワーク層での遮断ではなくBFF経由の規約のみで直接アクセスを防いでいる点に注意（以前のContainer Apps構成ではInternal ingressでネットワーク層から非公開にしていた）。
 
 認証はJWT二重トークン方式：Access Token（15分・メモリ保持のみ、localStorage等へは一切保存しない）＋Refresh Token（8時間・BFFがHttpOnly/Secure/SameSite=Strict Cookieで終端）。Access Token期限切れ時はAPIクライアントが401を検知して自動的にRefreshし、リクエストを1回だけリトライする。
 
@@ -101,13 +101,13 @@ STAFF < MANAGER < ADMIN の3段階。要件定義の権限マトリクスと実�
 - API: http://localhost:8000/docs
 - DB: `localhost:3306` / `apparel_pos`
 
-### Azure本番（`rg-001-gen12`、共有リソースグループ）
-- Frontend: `ca-pos-frontend`（外部公開）
-- Backend: `ca-pos-backend`（Internal ingress、外部非公開）
-- 環境: `cae-tvmvp`（他プロジェクトと共有）
-- ACR: `acrtvmvp73bb.azurecr.io`（共有）
+### Azure本番（`rg-001-gen12`、講師管理の共有リソースグループ）
+- Frontend: `app-tech0-gen12-15-fe`（Azure App Service, Linux, Free F1プラン）
+- Backend: `app-tech0-gen12-15-be`（Azure App Service, Linux, Free F1プラン、同一プランをfeと共有）
 - DB: `gen12-mysql-pos` / `apparel_pos`（共有サーバー、`tech0`管理）
-- スケール: `minReplicas=0`（コスト優先、コールドスタートは許容する判断済み）
+- 詳細な設定・再デプロイ手順・既知のハマりどころは `DEPLOYMENT.md` を参照
+
+> 以前はAzure Container Apps（`ca-pos-frontend`/`ca-pos-backend`、`minReplicas=0`のConsumptionプラン）を検証環境として並行稼働していたが、2026-10-08に削除しこの環境に一本化した。
 
 ### テスト用アカウント（ローカル・Azure本番の両方に存在）
 | ロール | ID | パスワード |

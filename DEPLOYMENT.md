@@ -1,17 +1,14 @@
 # デプロイ構成
 
-このリポジトリは **2系統のAzure環境** にデプロイされている。それぞれ目的が異なるため、どちらを触っているか常に意識すること。
+本番相当のAzure環境は以下の1系統のみ。
 
 | | 用途 | ホスティング | URL |
 |---|---|---|---|
-| **A. 実験環境** | 個人のAzureサブスクリプションでの検証用 | Azure Container Apps | https://ca-pos-frontend.whiteglacier-fe08d1c0.japaneast.azurecontainerapps.io |
-| **B. 授業提出用環境** | tech0 gen12コースの課題提出先（講師管理のリソースグループ） | Azure App Service（Linux） | https://app-tech0-gen12-15-fe.azurewebsites.net |
+| **授業提出用環境** | tech0 gen12コースの課題提出先（講師管理のリソースグループ） | Azure App Service（Linux） | https://app-tech0-gen12-15-fe.azurewebsites.net |
 
-両環境とも **同一のデータベース**（`gen12-mysql-pos` / `apparel_pos`）を共有している。一方で投入したデータはもう一方にも反映される。
+> 以前はAzure Container Apps（`ca-pos-frontend` / `ca-pos-backend`）による検証環境も並行稼働させていたが、2026-10-08にコスト整理のため削除し、この環境に一本化した。Container AppsのConsumptionプラン自体は`minReplicas: 0`でアイドル時課金なしだったが、運用環境を一本化する目的で削除している（詳細は本ファイル末尾の変更履歴を参照）。
 
----
-
-## B. 授業提出用環境（app-tech0-gen12-15-*）
+## 授業提出用環境（app-tech0-gen12-15-*）
 
 ### リソース
 
@@ -84,12 +81,11 @@ az webapp deploy -g rg-001-gen12 -n app-tech0-gen12-15-be --src-path deploy-back
 
 ---
 
-## A. 実験環境（ca-pos-*, Container Apps）
+## 変更履歴
 
-- 技術的な詳細（CORS、Refresh TokenのHttpOnly Cookie終端、Azure Database for MySQLのTLS設定など）は `PROJECT_CONTEXT.md` と `CODEGEN_CONTEXT.md` を参照。
-- `az acr build` でイメージをビルドし、`az containerapp update --revision-suffix <unique>` でリビジョンを切り替える運用。
-- DB・ユーザーはBと共通（`gen12-mysql-pos` / `apparel_pos` / ユーザー `tech0`）。
+- **2026-10-08**: Azure Container Apps（`ca-pos-frontend` / `ca-pos-backend`）を削除し、App Service環境に一本化。共有の`cae-tvmvp`環境・ACR（`acrtvmvp73bb`）・`gen12-mysql-pos`は他アプリと共有のため削除せず存続。DBとそのデータはApp Service環境と共通のため影響なし。
+- **2026-10-08**: App Service環境（`app-tech0-gen12-15-*`）を新規構築。
 
 ---
 
-*作成日: 2026-10-08。構成を変更した場合はこのファイルも更新すること。*
+*構成を変更した場合はこのファイルも更新すること。*
